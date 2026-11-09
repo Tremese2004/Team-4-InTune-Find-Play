@@ -1,0 +1,337 @@
+
+import 'package:flutter/material.dart';
+
+void main() {
+  runApp(const InTuneApp());
+}
+
+class InTuneApp extends StatelessWidget {
+  const InTuneApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'InTune: Find & Play',
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF0B0B18),
+        useMaterial3: true,
+      ),
+      home: const HomeScreen(),
+    );
+  }
+}
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final TextEditingController searchController =
+      TextEditingController();
+
+  int selectedIndex = 0;
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  void openPage(String title) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FeaturePage(title: title),
+      ),
+    );
+  }
+
+  void searchSong() {
+    final query = searchController.text.trim();
+
+    if (query.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter a song, artist, or lyrics.'),
+        ),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FeaturePage(
+          title: 'Search Results',
+          message: 'You searched for: $query',
+        ),
+      ),
+    );
+  }
+
+  Widget quickButton(
+    IconData icon,
+    String title,
+    VoidCallback onTap,
+  ) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Column(
+          children: [
+            CircleAvatar(
+              radius: 25,
+              backgroundColor: const Color(0xFF202039),
+              child: Icon(icon, color: Colors.white),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(22),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 15),
+
+              Row(
+                mainAxisAlignment:
+                    MainAxisAlignment.spaceBetween,
+                children: [
+                  const Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Good morning,',
+                        style: TextStyle(
+                          color: Colors.grey,
+                          fontSize: 14,
+                        ),
+                      ),
+                      Text(
+                        'User',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    onPressed: () => openPage('Profile'),
+                    icon: const Icon(
+                      Icons.account_circle,
+                      size: 32,
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 28),
+
+              TextField(
+                controller: searchController,
+                onSubmitted: (_) => searchSong(),
+                decoration: InputDecoration(
+                  hintText: 'Search by lyrics, song, or artist...',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.arrow_forward),
+                    onPressed: searchSong,
+                  ),
+                  filled: true,
+                  fillColor: const Color(0xFF222238),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 25),
+
+              // Voice Search
+              Container(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [
+                      Color(0xFFAB42F5),
+                      Color(0xFF5936F5),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: ListTile(
+                  onTap: () => openPage('Voice Search'),
+                  leading: const Icon(
+                    Icons.mic,
+                    size: 32,
+                    color: Colors.white,
+                  ),
+                  title: const Text(
+                    'Voice Search',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  subtitle: const Text('Hum or sing a song'),
+                  trailing: const Icon(Icons.arrow_forward),
+                ),
+              ),
+
+              const SizedBox(height: 15),
+
+              // Type Lyrics
+              Container(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [
+                      Color(0xFF2196F3),
+                      Color(0xFF007BFF),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: ListTile(
+                  onTap: () => openPage('Type Lyrics'),
+                  leading: const Icon(
+                    Icons.keyboard,
+                    size: 32,
+                    color: Colors.white,
+                  ),
+                  title: const Text(
+                    'Type Lyrics',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'Know some words of a song?',
+                  ),
+                  trailing: const Icon(Icons.arrow_forward),
+                ),
+              ),
+
+              const SizedBox(height: 35),
+
+              const Text(
+                'Quick Access',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              Row(
+                children: [
+                  quickButton(
+                    Icons.library_music,
+                    'Your Playlist',
+                    () => openPage('Your Playlist'),
+                  ),
+                  quickButton(
+                    Icons.favorite,
+                    'Favorites',
+                    () => openPage('Favorites'),
+                  ),
+                  quickButton(
+                    Icons.history,
+                    'Search History',
+                    () => openPage('Search History'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: selectedIndex,
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: const Color(0xFF151525),
+        selectedItemColor: Colors.purpleAccent,
+        unselectedItemColor: Colors.grey,
+        onTap: (index) {
+          if (index == 0) {
+            setState(() => selectedIndex = 0);
+          } else {
+            const pages = [
+              'Home',
+              'Search',
+              'Library',
+              'Profile',
+            ];
+            openPage(pages[index]);
+          }
+        },
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.search),
+            label: 'Search',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.library_music),
+            label: 'Library',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'Profile',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Temporary screens for navigation
+class FeaturePage extends StatelessWidget {
+  final String title;
+  final String? message;
+
+  const FeaturePage({
+    super.key,
+    required this.title,
+    this.message,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: Center(
+        child: Text(
+          message ?? '$title Screen',
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 22),
+        ),
+      ),
+    );
+  }
+}
