@@ -1,4 +1,5 @@
 
+import 'lyric_search_page.dart';
 import 'package:flutter/material.dart';
 
 // This is the starting point of the InTune application.
@@ -65,9 +66,320 @@ class _MusicSearchScreenState extends State<MusicSearchScreen> {
   // Tracks whether the mini-player is playing or paused.
   bool isPlaying = false;
 
+  // Lets us open favorites from library.
+  bool showingFavorites = false;
+
   // Keeps track of which bottom navigation tab is selected.
   // 0 = Home, 1 = Library, 2 = Search, 3 = Playlist.
   int selectedTab = 2;
+  int previousTab = 2;
+
+
+  void goBack() {
+    setState(() {
+      selectedTab = previousTab;
+      showingFavorites = false;
+    });
+  }
+
+  final Set<String> followedArtists = {};
+
+  //Add or remove a song from Favorites
+  void toggleFavorite(Map<String, String> song) {
+    setState(() {
+      final exists = favoriteSongs.any(
+        (item) => item['title'] == song['title'],
+      );
+
+      if (exists) {
+        favoriteSongs.removeWhere(
+          (item) => item['title'] == song['title'],
+        );
+      } else {
+        favoriteSongs.add(
+          Map<String, String>.from(song),
+        );
+      }
+    });
+  }
+
+  //Check whether a song is a favorite
+  bool isFavorite(Map<String, String> song) {
+    return favoriteSongs.any(
+      (item) => item['title'] == song['title'],
+    );
+  }
+
+  //Favorite screen
+  Widget buildFavoriteScreen() {
+    return StatefulBuilder(
+      builder: (context, updateFavorites) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(20),
+              child: Text(
+                'Favorites',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: TextField(
+                decoration: InputDecoration(
+                  hintText: 'Search favorites..',
+                  prefixIcon: const Icon(Icons.search),
+                  filled: true,
+                  fillColor: cardBackground,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(15),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                onChanged: (value) {
+                  updateFavorites(() {});
+                },
+              ),
+            ),
+
+            const SizedBox(height: 15),
+
+            Expanded(
+              child: favoriteSongs.isEmpty
+                  ? const Center(
+                    child: Text('You have no favorite songs yet.'),
+                  )
+                : ListView.builder(
+                  itemCount: favoriteSongs.length,
+                  itemBuilder: (context, index) {
+                    final song = favoriteSongs[index];
+
+                    return ListTile(
+                      leading: Icon(
+                        Icons.music_note,
+                        color: pink,
+                      ),
+
+                      title: Text(song['title'] ?? ''),
+                      subtitle: Text(song['artist'] ?? ''),
+
+                      onTap: () => playLibrarySong(song),
+
+                      trailing: IconButton(
+                        icon: const Icon(
+                          Icons.favorite,
+                          color: Colors.pink,
+                        ),
+                        onPressed: () {
+                          toggleFavorite(song);
+                          updateFavorites(() {});
+                        },
+                      ),
+                    );
+                  },
+                ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Map<String, String>? selectedArtistSong;
+
+  //Opens Artist Information for the selected song
+  void openArtistInformation(Map<String, String> song) {
+    setState(() {
+      selectedArtistSong = song;
+    });
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: background,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, updateArtist) {
+            final artist = song['artist'] ?? 'Unknown Artist';
+            final isFollowed = followedArtists.contains(artist);
+
+            return SizedBox(
+              height: 600,
+              child: Padding(
+                padding: const EdgeInsets.all(22),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 45,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: Colors.white38,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 25),
+
+                    const Icon(
+                      Icons.person,
+                      size: 75,
+                      color: Colors.white70,
+                    ),
+
+                    const SizedBox(height: 15),
+
+                    Text(
+                      artist,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 27,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+
+                    const SizedBox(height: 15),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              playLibrarySong(song);
+                              Navigator.pop(context);
+                            },
+                            child: const Text('Play Music'),
+                          ),
+                        ),
+
+                        const SizedBox(width: 10),
+
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () {
+                              setState(() {
+                                if (isFollowed) {
+                                  followedArtists.remove(artist);
+                                } else {
+                                  followedArtists.add(artist);
+                                }
+                              });
+
+                              updateArtist(() {});
+                            },
+                            child: Text(
+                              'Related Songs',
+                              style: TextStyle(
+                                fontSize: 21,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        ListTile(
+                          leading: Icon(
+                              Icons.music_note,
+                              color: pink,
+                            ),
+                            title: Text(
+                              song['title'] ?? ''
+                            ),
+                            subtitle: Text(artist),
+                            onTap: () {
+                              playLibrarySong(song);
+                              Navigator.pop(context);
+                            },
+                          ),
+                          
+                          const SizedBox(height: 15),
+                          
+                          const Text(
+                            'About the Artists',
+                            style: TextStyle(
+                              fontSize: 21,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          
+                          const SizedBox(height: 8),
+                            Text(
+                              'Explore music by $artist. '
+                              'Discover songs and keep track of your favorite artists.',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                ),
+                            ),
+                          ]),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          );
+        }
+
+  //Sample song catalog
+  final List<Map<String, String>> songCatalog = [
+    {'title': 'SET IT OFF', 'artist': 'Offset', 'duration': '3.02'},
+    {'title': 'Under the Sun', 'artist': 'Dreamville, J. Cole, DaBaby, Lute', 'duration': '3.59'},
+    {'title': 'Bodies', 'artist': 'Offset & JID', 'duration': '3.25'},
+    {'title': 'Surround Sound', 'artist': 'JID, 21 Savage, Baby Tate', 'duration': '3.49'},
+    {'title': 'Like That', 'artist': 'Future, Metro Boomin', 'duration': '4.27'},
+    {'title': 'BUTTERFLY EFFECT', 'artist': 'Travis Scott', 'duration': '3.11'},
+    {'title': 'heart pt.6', 'artist': 'Kendrick Lamar', 'duration': '4.10'},
+    {'title': 'Do for love', 'artist': '2Pac', 'duration': '4.46'},
+    {'title': 'meet the grahams', 'artist': 'Kendrick Lamar', 'duration': '6.06'},
+    {'title': "Can't Tell Me Nothing ", 'artist': 'Kanye West', 'duration': '4.31'},
+    {'title': 'Have You Ever', 'artist': 'Brandy', 'duration': '4.05'},
+  ];
+
+  //Library and listening activity
+  final List<Map<String, String >> librarySongs = [];
+  final List<Map<String, String >> favoriteSongs = [];
+  final List<Map<String, String >> recentSaves = [];
+  final List<Map<String, String >> recentPlays = [];
+
+  //Initial playlists
+  final Map<String, List<Map<String, String>>> playlists = {
+    'Shower Jamz': [],
+    'Gym Set': [],
+    'Work Mix': [],
+  };
+
+  String activePlaylist = 'Shower Jamz';
+
+  @override
+  void initState() {
+    super.initState();
+
+    playlists['Shower Jamz'] = songCatalog
+        .map((song) => Map<String, String>.from(song))
+        .toList();
+    
+    playlists['Gym Set'] = [
+      songCatalog[4],
+      songCatalog[5],
+      songCatalog[0]
+    ].map((song) => Map<String, String>.from(song)).toList();
+
+    playlists['Work Mix'] = [
+      songCatalog[6],
+      songCatalog[8],
+      songCatalog[10]
+    ].map((song) => Map<String, String>.from(song)).toList();
+  }
 
   // This list stores the information for all nine music genres.
   // Each genre has a name, background colour, image, and height.
@@ -204,20 +516,609 @@ class _MusicSearchScreenState extends State<MusicSearchScreen> {
   // This function updates the selected bottom navigation tab.
   void selectNavigation(int index) {
     setState(() {
+      if (selectedTab  != index) {
+        previousTab = selectedTab;
+      }
+
       selectedTab = index;
+      showingFavorites = false;
+    });
+  }
+
+  //Plays songs and updates recent plays
+  void playLibrarySong(Map<String, String> song) {
+    setState(() {
+      currentSong = song['title'] ?? 'Unknown Song';
+      currentArtist = song['artist'] ?? 'Unknown Artist';
+
+      // The new placeholder song starts in the paused state.
+      isPlaying = true;
+
+      recentPlays.removeWhere(
+        (item) => item['title'] == song['title'],
+      );
+
+      recentPlays.insert(
+        0,
+        Map<String, String>.from(song),
+      );
+
+      if (recentPlays.length > 10) {
+        recentPlays.removeLast();
+      }
+    });
+  }
+
+  //Saves a song to the library and recent saves
+  void saveSong(Map<String, String> song) {
+    setState(() {
+      if (!librarySongs.any(
+        (item) => item['title'] == song['title'],
+      )) {
+        librarySongs.add(Map<String, String>.from(song));
+      }
+
+      recentSaves.removeWhere(
+        (item) => item['title'] == song['title'],
+      );
+
+      recentSaves.insert(
+        0,
+        Map<String, String>.from(song),
+      );
+
+      if (recentSaves.length > 10) {
+        recentSaves.removeLast();
+      }
     });
 
-    // Displays a message for screens that have not been built yet.
-    if (index != 2) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '${['Home', 'Library', 'Search', 'Playlist'][index]} screen coming soon!',
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Saved ${song['title']} to your library'),
+      ),
+    );
+  }
+
+  //Creates a new playlist
+  void createPlaylist() {
+    final controller = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: cardBackground,
+        title: const Text('Create Playlist'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            hintText: 'Playlist name',
           ),
         ),
-      );
-    }
+        actions: [
+          TextButton(
+            onPressed: () {
+              final name = controller.text.trim();
+
+              if (name.isNotEmpty &&
+                  !playlists.containsKey(name)) {
+                setState(() {
+                  playlists[name] = [];
+                });
+
+                Navigator.pop(dialogContext);
+
+                setState(() {
+                  selectedTab = 3;
+                });
+                }
+            },
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
   }
+
+  //Opens Library screen
+  Widget buildLibraryScreen() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Your Library',
+            style: TextStyle(
+              fontSize: 28,
+              color: Colors.white,
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          Text(
+            'Your music, all in one place',
+            style: TextStyle(color: Colors.white70),
+          ),
+
+          const SizedBox(height: 25),
+
+          // Library shortcuts 
+          Row(
+            children: [
+              Expanded(
+                child: libraryCard(
+                  'Recent Saves',
+                  recentSaves.length,
+                  Icons.bookmark,
+                  () => showSongCollection(
+                    'Recent Saves',
+                    recentSaves,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: libraryCard(
+                  'Recent Plays',
+                  recentPlays.length,
+                  Icons.history,
+                  () => showSongCollection(
+                    'Recent Plays',
+                    recentPlays,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          Row(
+            children: [
+              Expanded(
+                child: libraryCard(
+                  'Favorites',
+                  favoriteSongs.length,
+                  Icons.favorite,
+                  () => showSongCollection(
+                    'Favorites',
+                    favoriteSongs,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: libraryCard(
+                  'Saved Songs',
+                  librarySongs.length,
+                  Icons.library_music,
+                  () => showSongCollection(
+                    'Saved Songs',
+                    librarySongs,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 30),
+
+
+          //Playlist Header
+          Row(
+            mainAxisAlignment:MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'My Playlists',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+
+              IconButton(
+                onPressed: createPlaylist,
+                icon: Icon(
+                  Icons.add_circle,
+                  color: purple,
+                  size: 30,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          ...playlists.keys.map((name) {
+            return ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: CircleAvatar(
+                backgroundColor: cardBackground,
+                child: Icon(
+                  Icons.queue_music,
+                  color: pink,
+                ),
+              ),
+              title: Text(name),
+              subtitle: Text(
+                '${playlists[name]!.length} songs'
+              ),
+              trailing: const Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+              ),
+              onTap: () {
+                setState(() {
+                  activePlaylist = name;
+                  selectedTab = 3;
+                });
+              },
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  //Reusable Library Card
+  Widget libraryCard(
+    String title,
+    int count,
+    IconData icon,
+    VoidCallback onTap,
+  ) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: cardBackground,
+          borderRadius: BorderRadius.circular(15),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: purple, size: 27),
+            const SizedBox (height: 12),
+            Text(
+              title,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              '$count songs',
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.white70,
+              ),
+            ),
+          ]
+        )
+      ),
+    );
+  }
+
+  //Displays a selected song collection.
+  void showSongCollection(
+    String title,
+    List<Map<String, String>> songs,
+  ) {
+    // Implementation for displaying the song collection goes here.
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: background,
+      builder: (context) {
+        return SizedBox(
+          height: 450,
+          child: Column (
+            children: [
+
+              Padding(
+                padding: const EdgeInsets.all(18),
+                child: Row(
+                  children: [
+                    //return to the previous screen
+                    IconButton(
+                      icon:const Icon(
+                        Icons.arrow_back,
+                        color: Colors.white,
+                      ),
+                      onPressed: () {
+                        Navigator.pop(context);
+                      },
+                    ),
+
+                    const SizedBox(width: 10),
+
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 22,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              Expanded(
+                child: songs.isEmpty
+                    ? const Center(
+                        child: Text('No songs yet.'),
+                      )
+                      : ListView.builder(
+                          itemCount: songs.length,
+                          itemBuilder:(context, index) {
+                            final song = songs[index];
+                            
+                            return songTile(song);
+                          },
+                        ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  //Reusable song row
+  Widget songTile(Map<String, String> song) {
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: cardBackground,
+        child: Icon(
+          Icons.music_note,
+          color: pink,
+        ),
+      ),
+
+      title: Text(song['title'] ?? ''),
+      subtitle: Text(song['artist'] ?? ''),
+
+      trailing: PopupMenuButton<String>(
+        onSelected: (action) {
+          if (action == 'play') {
+            playLibrarySong(song);
+          } else if (action == 'Save') {
+            saveSong(song);
+          } else if (action == 'Favorite') {
+            toggleFavorite(song);
+          }
+        },
+        itemBuilder:(context) => const [
+          PopupMenuItem(
+            value: 'Play',
+            child: Text('Play'),
+          ),
+          PopupMenuItem(
+            value: 'Save',
+            child: Text('Save to Library'),
+          ),
+          PopupMenuItem(
+            value: 'Favorite',
+            child: Text('Add to Favorites'),
+          )
+        ],
+      ),
+
+      onTap: () => playLibrarySong(song),
+    );
+  }
+
+  //Playlist Screen
+  Widget buildPlaylistScreen() {
+    final songs = playlists[activePlaylist] ?? [];
+
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Playlist content goes here
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'My Playlist',
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+
+              IconButton(
+                onPressed: renamePlaylist,
+                icon: Icon(Icons.add, color: pink),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 15),
+
+          Text(
+            activePlaylist,
+            style: TextStyle(
+              fontSize: 21,
+              color: purple,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
+          const SizedBox(height: 6),
+
+          Text(
+            '${songs.length} tracks',
+            style: const TextStyle(
+              color: Colors.white70,
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          Expanded(
+            child: songs.isEmpty
+                ? const Center(
+                  child: Text('Add songs to this playlist'),
+                )
+              : ListView.builder(
+                itemCount: songs.length,
+                itemBuilder:(context, index) {
+                  final song = songs[index];
+
+                  return ListTile(
+                    leading: Icon(
+                      Icons.music_note,
+                      color: pink,
+                    ),
+
+                    title: Text(song['title'] ?? ''),
+                    subtitle: Text(song['artist'] ?? ''),
+
+                    onTap: () => playLibrarySong(song),
+
+                    trailing: IconButton(
+                      icon: const Icon(
+                        Icons.remove_circle_outline,
+                        color: Colors.redAccent,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          songs.removeAt(index);
+                        });
+                      }
+                    ),
+                  );
+                },
+              ),
+
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Renames the current playlist.
+  void renamePlaylist() {
+    final controller = TextEditingController(
+      text: activePlaylist,
+    );
+
+    showDialog<String>(
+      context: context,
+      builder: (dialogcontext) => AlertDialog(
+        title: const Text('Rename Playlist'),
+
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            hintText: 'New playlist name',
+          ),
+        ),
+
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogcontext),
+            child: const Text('Cancel'),
+          ),
+
+          ElevatedButton(
+            onPressed: () {
+              final newName = controller.text.trim();
+
+              if (newName.isNotEmpty &&
+                 !playlists.containsKey(newName)) {
+                setState(() {
+                  playlists[newName] =
+                      playlists.remove(activePlaylist)!;
+                  activePlaylist = newName;
+                });
+
+                Navigator.pop(dialogcontext);
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  //Add songs to the current playlist.
+  void addSongsToPlaylists() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: background,
+      isScrollControlled: true,
+
+      builder: (context) {
+        return SizedBox(
+          height: 500,
+          child: Column(
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(18),
+                child: Text(
+                  'Add Songs',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+
+              Expanded(
+                child: ListView.builder(
+                  itemCount: songCatalog.length,
+
+                  itemBuilder: (context, index) {
+                    final song = songCatalog[index];
+
+                    return ListTile(
+                      title: Text(song['title']!),
+                      subtitle: Text(song['artist']!),
+
+                      trailing: IconButton(
+                        icon: Icon(
+                          Icons.add_circle,
+                          color: purple,
+                        ),
+
+                        onPressed: () {
+                          setState(() {
+                            final playlist =
+                                playlists[activePlaylist]!;
+                            
+                            if (!playlist.any(
+                              (item) =>
+                                  item['title'] == song['title'],
+                            )) {
+                              playlist.add(
+                                Map<String, String>.from(song),
+                              );
+                            }
+                          });
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+  
 
   // Disposes of the search controller when the screen is removed.
   // This helps prevent unnecessary memory use.
@@ -227,22 +1128,274 @@ class _MusicSearchScreenState extends State<MusicSearchScreen> {
     super.dispose();
   }
 
-  // This method builds everything displayed on the Music Search screen.
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: background,
+  Widget buildSelectedScreen() {
+    if (showingFavorites) {
+      return Column(
+        children: [
+          ListTile(
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () {
+                setState(() {
+                  showingFavorites = false;
+                });
+              },
+            ),
+            title: const Text('Favorites'),
+          ),
+          Expanded(
+            child: buildFavoriteScreen(),
+          ),
+        ],
+      );
+    }
 
-      // SafeArea keeps content away from the phone's status bar
-      // and other system areas.
-      body: SafeArea(
+    switch (selectedTab) {
+      case 0:
+        return buildHomeScreen();
+      
+      case 1:
+        return buildLibraryScreen();
+      
+      case 2:
+        return buildSearchScreen();
+      
+      case 3:
+        return buildPlaylistScreen();
+      
+      case 4:
+        return LyricSearchPage(
+          onBack: goBack,
+        );
+      
+      default:
+        return buildSearchScreen();
+    }
+  }
+
+  Widget buildHomeScreen() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 15),
+
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Good Morning,',
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: 14,
+                    ),
+                  ),
+                  Text(
+                    'User',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              IconButton(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Profile coming soon!'),
+                    ),
+                  );
+                },
+                icon: const Icon(
+                  Icons.account_circle,
+                  size: 32,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 28),
+
+          TextField(
+            controller: searchController,
+            onSubmitted: (_) {
+              setState(() {
+                selectedTab = 2;
+                showingFavorites = false;
+              });
+              searchMusic();
+            },
+            decoration: InputDecoration(
+              hintText: 'Search by lyrics, song, or artist...',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.arrow_forward),
+                onPressed: () {
+                  setState(() {
+                    selectedTab = 2;
+                    showingFavorites = false;
+                  });
+                  searchMusic();
+                },
+              ),
+              filled: true,
+              fillColor: cardBackground,
+              border:OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 25),
+
+          Container(
+            decoration:BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [
+                  Color(0xFFAB42F5),
+                  Color(0xFF5936F5),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: ListTile(
+              onTap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Voice Search is coming soon!'),
+                  ),
+                );
+              },
+              leading: const Icon(
+                Icons.mic,
+                size: 32,
+                color: Colors.white,
+              ),
+              title: const Text(
+                'Voice Search',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: const Text('Hum or sing a song'),
+              trailing: const Icon(Icons.arrow_forward),
+            ),
+          ),
+
+          const SizedBox(height: 15),
+
+          Container(
+            decoration:BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [
+                  Color(0xFF2196F3),
+                  Color(0xFF007BFF),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: ListTile(
+              onTap:() {
+                setState(() {
+                  selectedTab = 4;
+                  showingFavorites = false;
+                });
+              },
+              leading: const Icon(
+                Icons.keyboard,
+                size: 32,
+                color: Colors.white,
+              ),
+              title: const Text(
+                'Type Lyrics',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: const Text('Know some of the words of the song?'),
+              trailing: const Icon(Icons.arrow_forward),
+            ),
+          ),
+
+          const SizedBox(height: 35),
+
+          const Text(
+            'Quick Access',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          Row(
+            children: [
+              homeQuickButton(
+                Icons.library_music,
+                'Your Playlist',
+                () => selectNavigation(3),
+              ),
+              homeQuickButton(
+                Icons.favorite,
+                'Favorites',
+                () {
+                  setState(() {
+                    selectedTab = 1;
+                    showingFavorites = true;
+                  });
+                },
+              ),
+              homeQuickButton(
+                Icons.history,
+                'Search History',
+                () => selectNavigation(1),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget homeQuickButton(
+    IconData icon,
+    String title,
+    VoidCallback onTap,
+  ) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
         child: Column(
           children: [
+            CircleAvatar(
+              radius: 25,
+              backgroundColor: cardBackground,
+              child: Icon(icon, color: Colors.white),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-            // MAIN SCREEN CONTENT
-            // Expanded allows this section to use the available space.
-            Expanded(
-              child: SingleChildScrollView(
+  Widget buildSearchScreen() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Search screen content goes here.
+          SingleChildScrollView(
                 // Adds spacing around the screen content.
                 padding: const EdgeInsets.all(22),
 
@@ -527,14 +1680,50 @@ class _MusicSearchScreenState extends State<MusicSearchScreen> {
 
                               //Displays the blues card
                               genreCard(genres[8]),
-                            ],
-                          ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+   }
+
+
+  // This method builds everything displayed on the Music Search screen.
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: background,
+
+      // SafeArea keeps content away from the phone's status bar
+      // and other system areas.
+      body: SafeArea(
+        child: Column(
+          children: [
+
+            //shows back arrows when opening secondary screen
+            if (selectedTab == 4)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: IconButton(
+                  icon: const Icon(
+                    Icons.arrow_back,
+                    color: Colors.white,
+                  ),
+                  onPressed: goBack,
+                  tooltip: 'Back',
                 ),
               ),
+
+            // MAIN SCREEN changes based on the selected tab.
+            // Expanded allows this section to use the available space.
+            Expanded(
+              child: buildSelectedScreen(),
             ),
 
 
