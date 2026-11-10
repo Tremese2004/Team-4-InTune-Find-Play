@@ -75,10 +75,10 @@ class _LyricSearchPageState extends State<LyricSearchPage> {
   bool hasSearched = false;
   String? errorMessage;
 
-  static const Color backgroundColor = Color(0xFF140D25);
-  static const Color cardColor = Color(0xFF291D3B);
-  static const Color purpleColor = Color(0xFF9562D5);
-  static const Color lightPurple = Color(0xFFB88CFF);
+  static const Color backgroundColor = Color(0xFF000000);
+  static const Color cardColor = Color(0xFF1C1C1E);
+  static const Color purpleColor = Color(0xFFB69AFF);
+  static const Color lightPurple = Color(0xFFB69AFF);
 
   // Replace this with an appropriate contact email.
   static const String contactEmail = 'Johnsean623@gmail.com';
@@ -319,7 +319,7 @@ class _LyricSearchPageState extends State<LyricSearchPage> {
                     label: const Text('Open Song'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: purpleColor,
-                      foregroundColor: Colors.white,
+                      foregroundColor: Colors.black,
                       padding: const EdgeInsets.all(15),
                     ),
                   ),
@@ -383,7 +383,7 @@ class _LyricSearchPageState extends State<LyricSearchPage> {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: const Color(0xFF704A9A),
+        color: const Color(0xFF2C2C2E),
         borderRadius: BorderRadius.circular(12),
       ),
       child: const Icon(
@@ -422,7 +422,7 @@ class _LyricSearchPageState extends State<LyricSearchPage> {
         fillColor: cardColor,
         contentPadding: const EdgeInsets.all(18),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(15),
+          borderRadius: BorderRadius.circular(20),
           borderSide: BorderSide.none,
         ),
       ),
@@ -432,15 +432,15 @@ class _LyricSearchPageState extends State<LyricSearchPage> {
   Widget buildSearchButton() {
     return SizedBox(
       width: double.infinity,
-      height: 55,
+      height: 50,
       child: ElevatedButton(
         onPressed: isLoading ? null : searchLyrics,
         style: ElevatedButton.styleFrom(
           backgroundColor: purpleColor,
-          foregroundColor: Colors.white,
+          foregroundColor: Colors.black,
           disabledBackgroundColor: purpleColor.withValues(alpha: 0.5),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(25),
           ),
         ),
         child: isLoading
@@ -468,9 +468,9 @@ class _LyricSearchPageState extends State<LyricSearchPage> {
       margin: const EdgeInsets.only(bottom: 13),
       decoration: BoxDecoration(
         color: cardColor,
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: const Color(0xFF49365F),
+          color: const Color(0x1FFFFFFF),
         ),
       ),
       child: ListTile(
@@ -607,7 +607,7 @@ class _LyricSearchPageState extends State<LyricSearchPage> {
           children: [
             Icon(
               Icons.music_note,
-              color: Color(0xFF76559C),
+              color: Color(0x4DEBEBF5),
               size: 65,
             ),
             SizedBox(height: 15),
@@ -648,42 +648,18 @@ class _LyricSearchPageState extends State<LyricSearchPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: backgroundColor,
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF201431),
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: widget.onBack,
-        ),
-        title: const Row(
-          children: [
-            Icon(
-              Icons.graphic_eq,
-              color: lightPurple,
-              size: 30,
-            ),
-            SizedBox(width: 10),
-            Text(
-              'InTune',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 24,
-              ),
-            ),
-          ],
-        ),
-      ),
+      // The back button is the glass one drawn by the main screen.
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 15, 20, 10),
+          padding: const EdgeInsets.fromLTRB(20, 64, 20, 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Find the song.',
+                'Find the song',
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 30,
+                  fontSize: 34,
                   fontWeight: FontWeight.bold,
                 ),
               ),

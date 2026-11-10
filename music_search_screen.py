@@ -1,5 +1,9 @@
 
+import 'itunes.dart';
 import 'lyric_search_page.dart';
+import 'song_detector_page.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
 // This is the starting point of the InTune application.
@@ -23,7 +27,21 @@ class InTuneApp extends StatelessWidget {
       // Sets the overall app theme and background colour.
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF171323),
+        // Uses iPhone behaviour everywhere: the San Francisco font on iOS,
+        // bouncy scrolling and iOS-style gestures.
+        platform: TargetPlatform.iOS,
+        scaffoldBackgroundColor: Colors.black,
+        colorScheme: const ColorScheme.dark(primary: accent, surface: surface),
+        // Pop-up messages float above the tab bar instead of covering it.
+        snackBarTheme: SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: surfaceRaised,
+          contentTextStyle: const TextStyle(color: Colors.white, fontSize: 15),
+          insetPadding: const EdgeInsets.fromLTRB(16, 0, 16, 156),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
         useMaterial3: true,
       ),
 
@@ -51,10 +69,10 @@ class _MusicSearchScreenState extends State<MusicSearchScreen> {
       TextEditingController();
 
   // These variables store the colours used throughout the app.
-  final Color background = const Color(0xFF171323);
+  final Color background = const Color(0xFF000000);
   final Color purple = const Color(0xFFB69AFF);
-  final Color pink = const Color(0xFFEA91D8);
-  final Color cardBackground = const Color(0xFF292238);
+  final Color pink = const Color(0xFFB69AFF); // same as purple: one accent
+  final Color cardBackground = const Color(0xFF1C1C1E);
 
   // Stores the message displayed after a search.
   String searchMessage = '';
@@ -63,14 +81,21 @@ class _MusicSearchScreenState extends State<MusicSearchScreen> {
   String currentSong = 'Blinding Lights';
   String currentArtist = 'The Weeknd';
 
+  // Album cover shown in the mini-player (empty until a song loads).
+  String currentArtwork = '';
+
   // Tracks whether the mini-player is playing or paused.
   bool isPlaying = false;
 
   // Lets us open favorites from library.
   bool showingFavorites = false;
 
+  // Plays the audio for the mini-player.
+  final AudioPlayer player = AudioPlayer();
+
   // Keeps track of which bottom navigation tab is selected.
-  // 0 = Home, 1 = Library, 2 = Search, 3 = Playlist.
+  // 0 = Home, 1 = Library, 2 = Search, 3 = Playlist,
+  // 4 = Lyric Search, 5 = Song Detector (Voice Search).
   int selectedTab = 2;
   int previousTab = 2;
 
@@ -364,6 +389,13 @@ class _MusicSearchScreenState extends State<MusicSearchScreen> {
   void initState() {
     super.initState();
 
+    // Keeps the play/pause icon in sync with the audio player.
+    player.onPlayerStateChanged.listen((state) {
+      if (mounted) {
+        setState(() => isPlaying = state == PlayerState.playing);
+      }
+    });
+
     playlists['Shower Jamz'] = songCatalog
         .map((song) => Map<String, String>.from(song))
         .toList();
@@ -495,22 +527,22 @@ class _MusicSearchScreenState extends State<MusicSearchScreen> {
   }
 
   // This function switches the mini-player between playing and paused.
-  void togglePlay() {
-    setState(() {
-      // Changes the playing status to its opposite.
-      isPlaying = !isPlaying;
-    });
+  // If nothing is loaded yet, it starts the song shown in the mini-player.
+  Future<void> togglePlay() async {
+    switch (player.state) {
+      case PlayerState.playing:
+        await player.pause();
+      case PlayerState.paused:
+        await player.resume();
+      default:
+        await playLibrarySong({'title': currentSong, 'artist': currentArtist});
+    }
   }
 
-  // This function changes the song displayed in the mini-player.
+  // This function plays the next song in the catalog.
   void nextSong() {
-    setState(() {
-      currentSong = 'Next Song';
-      currentArtist = 'Artist Name';
-
-      // The new placeholder song starts in the paused state.
-      isPlaying = false;
-    });
+    final index = songCatalog.indexWhere((s) => s['title'] == currentSong);
+    playLibrarySong(songCatalog[(index + 1) % songCatalog.length]);
   }
 
   // This function updates the selected bottom navigation tab.
@@ -526,13 +558,14 @@ class _MusicSearchScreenState extends State<MusicSearchScreen> {
   }
 
   //Plays songs and updates recent plays
-  void playLibrarySong(Map<String, String> song) {
-    setState(() {
-      currentSong = song['title'] ?? 'Unknown Song';
-      currentArtist = song['artist'] ?? 'Unknown Artist';
+  Future<void> playLibrarySong(Map<String, String> song) async {
+    final title = song['title'] ?? 'Unknown Song';
+    final artist = song['artist'] ?? 'Unknown Artist';
 
-      // The new placeholder song starts in the paused state.
-      isPlaying = true;
+    setState(() {
+      currentSong = title;
+      currentArtist = artist;
+      currentArtwork = '';
 
       recentPlays.removeWhere(
         (item) => item['title'] == song['title'],
@@ -547,6 +580,26 @@ class _MusicSearchScreenState extends State<MusicSearchScreen> {
         recentPlays.removeLast();
       }
     });
+
+    try {
+      // Stops the old song right away while the new one loads.
+      await player.stop();
+
+      final track = await findTrack(title, artist);
+
+      // Ignores this result if the user picked another song while it loaded.
+      if (!mounted || currentSong != title) return;
+
+      if (track == null) throw Exception('No preview found');
+      setState(() => currentArtwork = track.artworkUrl);
+      await player.play(UrlSource(track.previewUrl));
+    } catch (_) {
+      if (!mounted || currentSong != title) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No audio preview available for $title')),
+      );
+    }
   }
 
   //Saves a song to the library and recent saves
@@ -624,7 +677,7 @@ class _MusicSearchScreenState extends State<MusicSearchScreen> {
   //Opens Library screen
   Widget buildLibraryScreen() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, bottomInset),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -885,7 +938,7 @@ class _MusicSearchScreenState extends State<MusicSearchScreen> {
 
       trailing: PopupMenuButton<String>(
         onSelected: (action) {
-          if (action == 'play') {
+          if (action == 'Play') {
             playLibrarySong(song);
           } else if (action == 'Save') {
             saveSong(song);
@@ -1125,6 +1178,7 @@ class _MusicSearchScreenState extends State<MusicSearchScreen> {
   @override
   void dispose() {
     searchController.dispose();
+    player.dispose();
     super.dispose();
   }
 
@@ -1167,179 +1221,160 @@ class _MusicSearchScreenState extends State<MusicSearchScreen> {
         return LyricSearchPage(
           onBack: goBack,
         );
-      
+
+      case 5:
+        return SongDetectorPage(
+          bottomInset: bottomInset,
+          currentSong: currentSong,
+          isPlaying: isPlaying,
+          onPlay: playLibrarySong,
+          onTogglePlay: togglePlay,
+        );
+
       default:
         return buildSearchScreen();
     }
   }
 
+  // Opens the Search tab and runs the search typed on Home.
+  void openSearch() {
+    setState(() {
+      selectedTab = 2;
+      showingFavorites = false;
+    });
+    searchMusic();
+  }
+
   Widget buildHomeScreen() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(22),
+      padding: EdgeInsets.fromLTRB(20, 12, 20, bottomInset),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 15),
-
+          // Greeting as an iOS large title, with the profile button.
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Good Morning,',
-                    style: TextStyle(
-                      color: Colors.grey,
-                      fontSize: 14,
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Good morning',
+                      style: TextStyle(color: textSecondary, fontSize: 15),
                     ),
-                  ),
-                  Text(
-                    'User',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
+                    Text(
+                      'User',
+                      style: TextStyle(
+                        fontSize: 34,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.4,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-              IconButton(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Profile coming soon!'),
-                    ),
-                  );
-                },
-                icon: const Icon(
-                  Icons.account_circle,
-                  size: 32,
+              Glass(
+                radius: 24,
+                child: IconButton(
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Profile is coming soon'),
+                      ),
+                    );
+                  },
+                  tooltip: 'Profile',
+                  icon: const Icon(
+                    CupertinoIcons.person_fill,
+                    size: 20,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ],
           ),
 
-          const SizedBox(height: 28),
+          const SizedBox(height: 20),
 
+          // Search field. Pressing search on the keyboard opens the results.
           TextField(
             controller: searchController,
-            onSubmitted: (_) {
-              setState(() {
-                selectedTab = 2;
-                showingFavorites = false;
-              });
-              searchMusic();
-            },
+            textInputAction: TextInputAction.search,
+            onSubmitted: (_) => openSearch(),
+            style: const TextStyle(fontSize: 17),
             decoration: InputDecoration(
-              hintText: 'Search by lyrics, song, or artist...',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.arrow_forward),
-                onPressed: () {
-                  setState(() {
-                    selectedTab = 2;
-                    showingFavorites = false;
-                  });
-                  searchMusic();
-                },
+              hintText: 'Lyrics, song or artist',
+              hintStyle: const TextStyle(color: textSecondary, fontSize: 17),
+              prefixIcon: const Icon(
+                CupertinoIcons.search,
+                size: 20,
+                color: textSecondary,
               ),
               filled: true,
-              fillColor: cardBackground,
-              border:OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
+              fillColor: surface,
+              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(24),
                 borderSide: BorderSide.none,
               ),
             ),
           ),
 
-          const SizedBox(height: 25),
+          const SizedBox(height: 24),
 
-          Container(
-            decoration:BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [
-                  Color(0xFFAB42F5),
-                  Color(0xFF5936F5),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: ListTile(
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Voice Search is coming soon!'),
-                  ),
-                );
-              },
-              leading: const Icon(
-                Icons.mic,
-                size: 32,
-                color: Colors.white,
-              ),
-              title: const Text(
-                'Voice Search',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: const Text('Hum or sing a song'),
-              trailing: const Icon(Icons.arrow_forward),
+          // The two ways to find a song, as one grouped list.
+          Material(
+            color: surface,
+            borderRadius: BorderRadius.circular(24),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                entryRow(
+                  icon: CupertinoIcons.mic_fill,
+                  title: 'Voice Search',
+                  subtitle: 'Hum or sing a song',
+                  primary: true,
+                  onTap: () => selectNavigation(5),
+                ),
+                const Divider(
+                  height: 1,
+                  thickness: 0.5,
+                  indent: 68,
+                  color: hairline,
+                ),
+                entryRow(
+                  icon: CupertinoIcons.keyboard,
+                  title: 'Type Lyrics',
+                  subtitle: 'Know some of the words?',
+                  onTap: () => selectNavigation(4),
+                ),
+              ],
             ),
           ),
 
-          const SizedBox(height: 15),
-
-          Container(
-            decoration:BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [
-                  Color(0xFF2196F3),
-                  Color(0xFF007BFF),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: ListTile(
-              onTap:() {
-                setState(() {
-                  selectedTab = 4;
-                  showingFavorites = false;
-                });
-              },
-              leading: const Icon(
-                Icons.keyboard,
-                size: 32,
-                color: Colors.white,
-              ),
-              title: const Text(
-                'Type Lyrics',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: const Text('Know some of the words of the song?'),
-              trailing: const Icon(Icons.arrow_forward),
-            ),
-          ),
-
-          const SizedBox(height: 35),
+          const SizedBox(height: 32),
 
           const Text(
-            'Quick Access',
+            'Quick access',
             style: TextStyle(
               fontWeight: FontWeight.bold,
-              fontSize: 18,
+              fontSize: 22,
+              letterSpacing: 0.35,
             ),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
           Row(
             children: [
               homeQuickButton(
-                Icons.library_music,
+                CupertinoIcons.music_note_list,
                 'Your Playlist',
                 () => selectNavigation(3),
               ),
               homeQuickButton(
-                Icons.favorite,
+                CupertinoIcons.heart_fill,
                 'Favorites',
                 () {
                   setState(() {
@@ -1349,13 +1384,73 @@ class _MusicSearchScreenState extends State<MusicSearchScreen> {
                 },
               ),
               homeQuickButton(
-                Icons.history,
+                CupertinoIcons.clock_fill,
                 'Search History',
                 () => selectNavigation(1),
               ),
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  // One row in the Home list that opens Voice Search or Type Lyrics.
+  // The primary one gets the accent color on its icon.
+  Widget entryRow({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    bool primary = false,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: primary ? accent : surfaceRaised,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                icon,
+                size: 20,
+                color: primary ? onAccent : Colors.white,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.4,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(color: textSecondary, fontSize: 15),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              CupertinoIcons.chevron_forward,
+              size: 16,
+              color: Color(0x4DEBEBF5),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1368,21 +1463,28 @@ class _MusicSearchScreenState extends State<MusicSearchScreen> {
     return Expanded(
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Column(
-          children: [
-            CircleAvatar(
-              radius: 25,
-              backgroundColor: cardBackground,
-              child: Icon(icon, color: Colors.white),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12),
-            ),
-          ],
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: const BoxDecoration(
+                  color: surface,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 24, color: accent),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: textSecondary, fontSize: 13),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1390,7 +1492,7 @@ class _MusicSearchScreenState extends State<MusicSearchScreen> {
 
   Widget buildSearchScreen() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(22),
+      padding: EdgeInsets.only(bottom: bottomInset),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1694,172 +1796,210 @@ class _MusicSearchScreenState extends State<MusicSearchScreen> {
    }
 
 
-  // This method builds everything displayed on the Music Search screen.
+  // Space the floating mini-player and tab bar take at the bottom,
+  // so scrolling content can end above them.
+  double get bottomInset => 152 + MediaQuery.paddingOf(context).bottom;
+
+  // This method builds the app shell: the selected screen, with the
+  // mini-player and tab bar floating over it as glass.
   @override
   Widget build(BuildContext context) {
+    final safe = MediaQuery.paddingOf(context);
+
+    // The Song Detector fills the whole screen. Other screens stay below the
+    // status bar, and only Home, Library and Search scroll under the bars.
+    Widget screen = buildSelectedScreen();
+    if (selectedTab != 5) {
+      final scrollsUnderBars = selectedTab <= 2 && !showingFavorites;
+      screen = SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: EdgeInsets.only(bottom: scrollsUnderBars ? 0 : bottomInset),
+          child: screen,
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: background,
-
-      // SafeArea keeps content away from the phone's status bar
-      // and other system areas.
-      body: SafeArea(
-        child: Column(
-          children: [
-
-            //shows back arrows when opening secondary screen
-            if (selectedTab == 4)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: IconButton(
-                  icon: const Icon(
-                    Icons.arrow_back,
-                    color: Colors.white,
-                  ),
-                  onPressed: goBack,
-                  tooltip: 'Back',
+      body: Stack(
+        children: [
+          // MAIN SCREEN changes based on the selected tab.
+          // Screens fade and rise slightly when switching.
+          Positioned.fill(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 320),
+              switchInCurve: ease,
+              switchOutCurve: ease,
+              layoutBuilder: (current, previous) => Stack(
+                fit: StackFit.expand,
+                children: [...previous, if (current != null) current],
+              ),
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween(
+                    begin: const Offset(0, 0.015),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
                 ),
               ),
+              child: KeyedSubtree(
+                key: ValueKey('$selectedTab-$showingFavorites'),
+                child: screen,
+              ),
+            ),
+          ),
 
-            // MAIN SCREEN changes based on the selected tab.
-            // Expanded allows this section to use the available space.
+          // Back button on the Song Detector and Lyric Search.
+          if (selectedTab >= 4)
+            Positioned(
+              top: safe.top + 8,
+              left: 16,
+              child: Glass(
+                radius: 24,
+                child: IconButton(
+                  onPressed: goBack,
+                  tooltip: 'Back',
+                  icon: const Icon(
+                    CupertinoIcons.chevron_back,
+                    size: 20,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+
+          // MINI-PLAYER and TAB BAR, floating above the screen.
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: safe.bottom > 20 ? safe.bottom - 8 : 12,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                buildMiniPlayer(),
+                const SizedBox(height: 8),
+                buildTabBar(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // MINI-PLAYER
+  // Displays the current song and playback controls.
+  Widget buildMiniPlayer() {
+    return Glass(
+      radius: 28,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 4, 4, 4),
+        child: Row(
+          children: [
+            // Album cover from iTunes (a music note until it loads).
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: SizedBox.square(
+                dimension: 40,
+                child: Cover(url: currentArtwork, iconSize: 18),
+              ),
+            ),
+
+            const SizedBox(width: 12),
+
+            // Displays the song title and artist.
             Expanded(
-              child: buildSelectedScreen(),
-            ),
-
-
-            // MINI-PLAYER
-            // Displays the current song and playback controls.
-            Container(
-              color: cardBackground,
-
-              // Adds spacing inside the mini-player.
-              padding: const EdgeInsets.symmetric(
-                horizontal: 18,
-                vertical: 13,
-              ),
-
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-
-                  // Placeholder album artwork.
-                  Container(
-                    height: 65,
-                    width: 65,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [purple, pink],
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-
-                    child: const Icon(
-                      Icons.music_note,
-                      color: Color(0xFF171323),
-                      size: 37,
+                  Text(
+                    currentSong,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
 
-                  const SizedBox(width: 13),
-
-                  // Displays the song title and artist.
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          currentSong,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-
-                        const SizedBox(height: 4),
-
-                        Text(
-                          currentArtist,
-                          style: const TextStyle(
-                            color: Color(0xFFB8B3C9),
-                            fontSize: 14,
-                          ),
-                        ),
+                  // Live bars before the artist while audio plays.
+                  Row(
+                    children: [
+                      if (isPlaying) ...[
+                        const LiveBars(height: 10),
+                        const SizedBox(width: 6),
                       ],
-                    ),
-                  ),
-
-                  // Play or pause button.
-                  IconButton(
-                    onPressed: togglePlay,
-                    icon: Icon(
-                      isPlaying
-                          ? Icons.pause
-                          : Icons.play_arrow,
-                      color: purple,
-                      size: 31,
-                    ),
-                  ),
-
-                  // Next song button.
-                  IconButton(
-                    onPressed: nextSong,
-                    icon: Icon(
-                      Icons.skip_next,
-                      color: pink,
-                      size: 31,
-                    ),
+                      Expanded(
+                        child: Text(
+                          currentArtist,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: textSecondary,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
 
-            // BOTTOM NAVIGATION BAR
-            // Allows users to select different app sections.
-            Container(
-              color: const Color(0xFF211C31),
-
-              padding: const EdgeInsets.symmetric(
-                vertical: 9,
-                horizontal: 5,
-              ),
-
-              child: Row(
-                mainAxisAlignment:
-                    MainAxisAlignment.spaceAround,
-                children: [
-
-                  // Home navigation button.
-                  navigationItem(
-                    Icons.home_outlined,
-                    'Home',
-                    0,
-                  ),
-
-                  // Library navigation button.
-                  navigationItem(
-                    Icons.library_music_outlined,
-                    'Library',
-                    1,
-                  ),
-
-                  // Search navigation button.
-                  navigationItem(
-                    Icons.search,
-                    'Search',
-                    2,
-                  ),
-
-                  // Playlist navigation button.
-                  navigationItem(
-                    Icons.queue_music,
-                    'Playlist',
-                    3,
-                  ),
-                ],
+            // Play or pause button; the icon cross-fades.
+            IconButton(
+              onPressed: togglePlay,
+              tooltip: isPlaying ? 'Pause' : 'Play',
+              icon: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 160),
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(scale: animation, child: child),
+                ),
+                child: Icon(
+                  isPlaying
+                      ? CupertinoIcons.pause_fill
+                      : CupertinoIcons.play_fill,
+                  key: ValueKey(isPlaying),
+                  color: Colors.white,
+                  size: 22,
+                ),
               ),
             ),
+
+            // Next song button.
+            IconButton(
+              onPressed: nextSong,
+              tooltip: 'Next',
+              icon: const Icon(
+                CupertinoIcons.forward_fill,
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // TAB BAR
+  // Allows users to select different app sections.
+  Widget buildTabBar() {
+    return Glass(
+      radius: 32,
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Row(
+          children: [
+            navigationItem(CupertinoIcons.house_fill, 'Home', 0),
+            navigationItem(CupertinoIcons.music_albums_fill, 'Library', 1),
+            navigationItem(CupertinoIcons.search, 'Search', 2),
+            navigationItem(CupertinoIcons.music_note_list, 'Playlist', 3),
           ],
         ),
       ),
@@ -1954,61 +2094,54 @@ class _MusicSearchScreenState extends State<MusicSearchScreen> {
   }
 
 
-  // This function creates each bottom navigation item.
-  // It highlights the selected tab and handles user taps.
+  // This function creates each tab bar item.
+  // The selected tab gets a lighter capsule behind it and the accent color.
   Widget navigationItem(
     IconData icon,
     String label,
     int index,
-    ) {
-      
-      // Checks whether this navigation item is selected.
-      final bool selected = selectedTab == index;
-      
-      return GestureDetector(
-        // Updates the selected tab when tapped.
-        onTap: () => selectNavigation(index),
-        
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Creates the rounded background behind the icon.
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 22,
-                vertical: 7,
-              ),
-              
-              decoration: BoxDecoration(
-                color: selected
-                  ? const Color(0xFF493B67)
-                  : Colors.transparent,
-                borderRadius: BorderRadius.circular(30),
-              ),
-              
-              // Displays the navigation icon.
-              child: Icon(
-                icon,
-                color: selected
-                ? Colors.white
-                : const Color(0xFFB8B3C9),
-              size: 27,
-            ),
-          ),
-          
-          const SizedBox(height: 4),
-          
-          // Displays the navigation label. 
-          Text(
-            label,
-            style: TextStyle(
+  ) {
+    // Checks whether this navigation item is selected.
+    final bool selected = selectedTab == index;
+    final Color color = selected ? accent : Colors.white;
+
+    return Expanded(
+      child: Semantics(
+        button: true,
+        selected: selected,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+
+          // Updates the selected tab when tapped.
+          onTap: () => selectNavigation(index),
+
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: ease,
+            height: 56,
+            decoration: BoxDecoration(
               color: selected
-                ? Colors.white
-                : const Color(0xFFB8B3C9),
-              fontSize: 13,
+                  ? const Color(0x24FFFFFF)
+                  : const Color(0x00FFFFFF),
+              borderRadius: BorderRadius.circular(28),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: color, size: 22),
+                const SizedBox(height: 3),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
