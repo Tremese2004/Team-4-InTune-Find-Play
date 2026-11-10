@@ -1833,7 +1833,7 @@ class _MusicSearchScreenState extends State<MusicSearchScreen> {
               switchOutCurve: ease,
               layoutBuilder: (current, previous) => Stack(
                 fit: StackFit.expand,
-                children: [...previous, if (current != null) current],
+                children: [...previous, ?current],
               ),
               transitionBuilder: (child, animation) => FadeTransition(
                 opacity: animation,
